@@ -95,22 +95,23 @@ installpkg()
 
 usage()
 {
+	local name="$(basename "$0")"
 	printf "Usage:\n"
-	printf "\t%s install <package name>    --  Install a package from the repositories\n" "$0"
-	printf "\t%s file-install <file>       --  Install a package from a file\n" "$0"
-	printf "\t%s url-install <url>         --  Install a package from a URL\n" "$0"
+	printf "\t%s install <package name>    --  Install a package from the repositories\n" "$name"
+	printf "\t%s file-install <file>       --  Install a package from a file\n" "$name"
+	printf "\t%s url-install <url>         --  Install a package from a URL\n" "$name"
 	printf "\n"
-	printf "\t%s deplist <package name>    --  List the dependencies of a package that are not installed system-wide\n" "$0"
+	printf "\t%s deplist <package name>    --  List the dependencies of a package that are not installed system-wide\n" "$name"
 	printf "\n"
-	printf "\t%s upgrade <package name>    --  Upgrade the package to a newer version, if available\n" "$0"
-	printf "\t%s upgrade-all               --  Upgrade all installed packaged\n" "$0"
+	printf "\t%s upgrade <package name>    --  Upgrade the package to a newer version, if available\n" "$name"
+	printf "\t%s upgrade-all               --  Upgrade all installed packaged\n" "$name"
 	printf "\n"
-	printf "\t%s uninstall <package name>  --  Uninstall a package\n" "$0"
-	printf "\t%s remove <package name>     --  Alias for uninstall\n" "$0"
+	printf "\t%s uninstall <package name>  --  Uninstall a package\n" "$name"
+	printf "\t%s remove <package name>     --  Alias for uninstall\n" "$name"
 	printf "\n"
-	printf "\t%s remove-locally-installed  --  Remove all locally-installed packages that are installed system-wide\n" "$0"
+	printf "\t%s remove-locally-installed  --  Remove all locally-installed packages that are installed system-wide\n" "$name"
 	printf "\n"
-	printf "\t%s bootstrap                 --  Bootstrap the installation of apt-stow\n" "$0"
+	printf "\t%s bootstrap                 --  Bootstrap the installation of apt-stow\n" "$name"
 
 	exit 1
 }
