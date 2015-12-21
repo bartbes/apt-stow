@@ -1,0 +1,72 @@
+#!/bin/bash
+
+usage()
+{
+	echo "Usage: $0 [-s <sep> | -f <flag>] [-g <flagsep>] <envvar> <relpath...>"
+	exit 1
+}
+
+MODE="sep"
+SEPARATOR=":"
+FLAG="-L"
+
+while getopts ":s:f:g:d" arg; do
+	case "$arg" in
+		s)
+			MODE="sep"
+			SEPARATOR="$OPTARG"
+			;;
+		f)
+			MODE="flag"
+			FLAG="$OPTARG"
+			SEPARATOR=" "
+			FLAGSEP=" "
+			;;
+		g)
+			FLAGSEP="$OPTARG"
+			;;
+		d) # Defaults
+			$0 PATH usr/bin usr/sbin
+			$0 LD_LIBRARY_PATH usr/lib usr/lib/x86_64-linux-gnu
+			$0 -fI -g "" CPPFLAGS usr/include
+			$0 -fL -g "" LDFLAGS usr/lib usr/lib/x86_64-linux-gnu
+			exit 0
+			;;
+		\?)
+			echo "Invalid option -$OPTARG"
+			usage
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument"
+			usage
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+ENVVAR="$1"
+shift 1
+
+if [[ "$ENVVAR" == "" ]]; then
+	usage
+fi
+
+EXTRASTR=""
+
+while (( "$#" )); do
+	RELPATH="$1"
+	NEWPATH="$(echo "$STOWTARGET/$RELPATH" | sed 's/\/\//\//g')"
+
+	shift 1
+
+	case "$MODE" in
+		sep)
+			EXTRASTR="${EXTRASTR}${NEWPATH}${SEPARATOR}"
+			;;
+		flag)
+			EXTRASTR="${EXTRASTR}-${FLAG}${FLAGSEP}${NEWPATH} "
+			;;
+	esac
+done
+
+printf "export %s=\"%s\$%s\"\n" "$ENVVAR" "$EXTRASTR" "$ENVVAR"

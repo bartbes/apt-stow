@@ -1,0 +1,262 @@
+#!/bin/bash
+
+STOW="stow"
+if [[ "$BOOTSTRAPSTOW" != "" ]]; then
+	STOW="$BOOTSTRAPSTOW"
+fi
+
+getdeplist()
+{
+	apt-get install -s "$1" | awk '/Inst/ {print $2}'
+}
+
+locallyinstalled()
+{
+	dpkg -s "$1" 2>/dev/null 1>/dev/null
+}
+
+installed()
+{
+	if [[ $INSTALLOVERRIDE = 1 ]]; then
+		return 1
+	fi
+	[[ -d "$STOWDIR/$1" ]]
+}
+
+newstatusline()
+{
+	local len=$(tput cols)
+	printf "\r%${len}c\r" " "
+}
+
+vergrep()
+{
+	gawk '/^Version/ && !matched { print $2; matched=1 } END { if (!matched) { exit 1 }}'
+}
+
+installpkg()
+{
+	local pkgname="$(basename $1 | grep -o '^[^_]*')"
+	printf "[$pkgname] Checking... "
+	if installed "$pkgname"; then
+		printf "installed\n"
+		return 0
+	fi
+	printf "installing\n"
+
+	local dirname="$(mktemp -d)"
+	cd "$dirname"
+
+	printf "[$pkgname] Downloading... "
+	if grep -E '^(http|https|ftp|file)://' <<< "$1" >/dev/null; then
+		if ! curl -L -o out.deb -k "$1" 2>/dev/null >/dev/null; then
+			printf "failed\n"
+			exit 1
+		fi
+	else
+		if [[ "$MINVERSION" != "" && "$(apt-cache show "$pkgname" 2>/dev/null | vergrep)" = "$MINVERSION" ]]; then
+			printf "up-to-date\n"
+			return 0
+		fi
+		if ! apt-get download "$pkgname" 2>/dev/null 1>/dev/null; then
+			printf "failed\n"
+			exit 1
+		fi
+	fi
+	printf "done"
+
+	newstatusline
+	printf "[$pkgname] Extracting... 0/3"
+	ar x *.deb 1>/dev/null
+	printf "\r[$pkgname] Extracting... 1/3"
+
+	mkdir -p "$STOWDIR/$pkgname"
+	cd "$STOWDIR/$pkgname"
+
+	tar xOf "$dirname/control.tar.gz" ./control | vergrep > "$STOWDIR/.APT_STOW_VERSION/$pkgname"
+	printf "\r[$pkgname] Extracting... 2/3"
+
+	tar xf "$dirname/"data.tar.* >/dev/null
+	printf "\r[$pkgname] Extracting... done"
+
+	newstatusline
+	printf "[$pkgname] Cleaning up... "
+	rm -rf "$dirname"
+	printf "done"
+
+	newstatusline
+	printf "[$pkgname] Stowing... "
+	$STOW -d "$STOWDIR" -t "$STOWTARGET" "$pkgname"
+	printf "done"
+
+	newstatusline
+	printf "[$pkgname] Installed!\n"
+}
+
+usage()
+{
+	printf "Usage:\n"
+	printf "\t%s install <package name>    --  Install a package from the repositories\n" "$0"
+	printf "\t%s file-install <file>       --  Install a package from a file\n" "$0"
+	printf "\t%s url-install <url>         --  Install a package from a URL\n" "$0"
+	printf "\n"
+	printf "\t%s deplist <package name>    --  List the dependencies of a package that are not installed system-wide\n" "$0"
+	printf "\n"
+	printf "\t%s upgrade <package name>    --  Upgrade the package to a newer version, if available\n" "$0"
+	printf "\t%s upgrade-all               --  Upgrade all installed packaged\n" "$0"
+	printf "\n"
+	printf "\t%s uninstall <package name>  --  Uninstall a package\n" "$0"
+	printf "\t%s remove <package name>     --  Alias for uninstall\n" "$0"
+	printf "\n"
+	printf "\t%s remove-locally-installed  --  Remove all locally-installed packages that are installed system-wide\n" "$0"
+	printf "\n"
+	printf "\t%s bootstrap                 --  Bootstrap the installation of apt-stow\n" "$0"
+
+	exit 1
+}
+
+upgradeable-apt-package()
+{
+	local pkg="$1"
+	local minversion=""
+	if [[ -f "$STOWDIR/.APT_STOW_VERSION/$pkg" ]]; then
+		minversion="$(cat "$STOWDIR/.APT_STOW_VERSION/$pkg")"
+	fi
+
+	local aptversion=""
+	aptversion="$(apt-cache show "$pkg" 2>/dev/null | vergrep)"
+	if [[ $? -ne 0 ]]; then
+		return 1
+	fi
+
+	if [[ "$minversion" != "" && "$aptversion" = "$minversion" ]]; then
+		return 1
+	fi
+
+	return 0
+}
+
+buildstow()
+{
+	wget http://ftpmirror.gnu.org/stow/stow-latest.tar.gz
+	tar xzf stow-latest.tar.gz
+	pushd stow-*/
+	./configure
+	make
+	popd
+
+	mv stow-*/bin/stow .
+
+	rm -r stow-*
+}
+
+main()
+{
+	if [[ "$#" -lt 1 ]]; then
+		usage
+	fi
+
+	local command="$1"
+	shift 1
+	case "$command" in
+		bootstrap)
+			if [[ "$STOWDIR" = "" || "$STOWTARGET" = "" ]]; then
+				echo "Make sure STOWDIR and STOWTARGET are set"
+				exit 1
+			fi
+
+			local curdir="$(pwd)/$(dirname $0)"
+			if [[ ! -x "$curdir/stow" ]]; then
+				pushd "$curdir"
+				buildstow
+				popd
+			fi
+
+			mkdir -p "$STOWDIR/stow-tools/usr/"
+			mkdir -p "$STOWDIR/.APT_STOW_VERSION"
+			mkdir -p "$STOWTARGET"
+
+			mv "$curdir" "$STOWDIR/stow-tools/usr/bin"
+			env BOOTSTRAPSTOW="$STOWDIR/stow-tools/usr/bin/stow" "$STOWDIR/stow-tools/usr/bin/$(basename $0)" install stow
+
+			if ! grep "STOWDIR" $HOME/.bashrc >/dev/null 2>/dev/null; then
+				echo "export STOWDIR=\"$STOWDIR\"" >> $HOME/.bashrc
+				echo "export STOWTARGET=\"$STOWTARGET\"" >> $HOME/.bashrc
+				echo "eval \$(\$STOWTARGET/usr/bin/bashrc-stow -d)" >> $HOME/.bashrc
+
+				echo "Restart your terminal for the new settings to take effect"
+			fi
+			exit 0
+			;;
+		upgrade)
+			INSTALLOVERRIDE=1
+			;;
+		upgrade-all)
+			cd "$STOWDIR"
+			for pkg in *; do
+				if upgradeable-apt-package "$pkg"; then
+					apt-stow upgrade "$pkg"
+					sleep 3 # Allow NFS to keep up
+				else
+					printf "$pkg up-to-date or not updateable\n"
+					sleep 0.2
+				fi
+			done
+			exit 0
+			;;
+		remove-locally-installed)
+			cd "$STOWDIR"
+			for pkg in *; do
+				if locallyinstalled "$pkg"; then
+					apt-stow remove "$pkg"
+					sleep 3 # Allow NFS to keep up
+				fi
+			done
+			exit 0
+	esac
+
+	if [[ $# -eq 0 ]]; then
+		usage
+		exit 1
+	fi
+
+	while [[ $# -gt 0 ]]; do
+		case "$command" in
+			install|upgrade)
+				for dep in $(getdeplist "$1"); do
+					if [[ -f "$STOWDIR/.APT_STOW_VERSION/$dep" ]]; then
+						MINVERSION="$(cat "$STOWDIR/.APT_STOW_VERSION/$dep")"
+					fi
+					installpkg "$dep"
+					unset MINVERSION
+				done
+				;;
+			file-install)
+				installpkg "file://$1"
+				;;
+			url-install)
+				installpkg "$1"
+				;;
+			deplist)
+				getdeplist "$1"
+				;;
+			remove|uninstall)
+				if [[ -d "$STOWDIR/$1" ]]; then
+					$STOW -d "$STOWDIR" -t "$STOWTARGET" -D "$1"
+					rm -rf "$STOWDIR/$1" "$STOWDIR/.APT_STOW_VERSION/$1"
+					printf "[$1] Removed!\n"
+				else
+					printf "[$1] Package not found!\n"
+				fi
+				;;
+			*)
+				usage
+				exit 1
+				;;
+		esac
+
+		shift 1
+	done
+}
+
+main "$@"
