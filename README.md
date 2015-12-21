@@ -1,5 +1,5 @@
 *Apt-stow* is the software you don't want to (have to) use. Written out of pure
-desparation, *apt-stow* allows installing packages from apt sources in your own
+desperation, *apt-stow* allows installing packages from apt sources in your own
 user profile using [GNU Stow][stow].
 
 Copyright
