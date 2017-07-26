@@ -28,6 +28,7 @@ while getopts ":s:f:g:d" arg; do
 		d) # Defaults
 			$0 PATH usr/bin usr/sbin
 			$0 LD_LIBRARY_PATH usr/lib usr/lib/x86_64-linux-gnu
+			$0 PERL5LIB usr/share/perl5
 			$0 -fI -g "" CPPFLAGS usr/include
 			$0 -fL -g "" LDFLAGS usr/lib usr/lib/x86_64-linux-gnu
 			exit 0
