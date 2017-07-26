@@ -179,6 +179,8 @@ main()
 
 			mv "$curdir" "$STOWDIR/stow-tools/usr/bin"
 			env BOOTSTRAPSTOW="$STOWDIR/stow-tools/usr/bin/stow" PERL5LIB="$STOWDIR/stow/usr/share/perl5" "$STOWDIR/stow-tools/usr/bin/$(basename $0)" install stow
+			rm "$STOWDIR/stow-tools/usr/bin/stow"
+			env PERL5LIB="$STOWDIR/stow/usr/share/perl5" "$STOWDIR/stow/usr/bin/stow" -d "$STOWDIR" -t "$STOWTARGET" "stow-tools"
 
 			if ! grep "STOWDIR" $HOME/.bashrc >/dev/null 2>/dev/null; then
 				echo "export STOWDIR=\"$STOWDIR\"" >> $HOME/.bashrc
